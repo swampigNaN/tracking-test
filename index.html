@@ -21,16 +21,16 @@ style
     ・opacity0 のみ → レンダリングが省略される場合あり（NG）
     解決策 画面内に1px残しつつ opacity0.001 で事実上不可視にする
    
-  #cam {
-    position fixed;
-    top 0; left 0;
-    width 1px; height 1px;
-    opacity 0.001;
-    pointer-events none;
-     iOS Safari 必須 
-    -webkit-playsinline '';
+#cam {
+    position: fixed;
+    top: 0; left: 0;
+    width: 640px; height: 480px; /* しっかりサイズを持たせる！ */
+    opacity: 0.001;
+    pointer-events: none;
+    z-index: -999; /* 画面のずっと奥に配置 */
+    /* iOS Safari 必須 */
+    -webkit-playsinline: '';
   }
-
   canvas { displayblock; positionfixed; top0; left0; }
 
    タップして開始 
