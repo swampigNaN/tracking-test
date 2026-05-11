@@ -76,18 +76,18 @@ function setup() {
   const cnv = createCanvas(windowWidth, windowHeight);
   cnv.parent(document.body);
 
-  // カメラ解像度: モバイル含め640x480を使用
-  // ※ MediaPipe HandPoseは低解像度だと21点のキーポイントが
-  //   潰れて検出精度が大幅に落ちるため、640x480を最低ラインとする
-  const camW = 640;
-  const camH = 480;
+  // カメラ解像度: 1280x720 (HD)
+  // MediaPipe HandPoseはHD解像度で21点キーポイントの検出精度が最大になる
+  // minを外してiOSカメラが起動できないケースを防ぐ
+  const camW = 1280;
+  const camH = 720;
 
   video = createCapture({
     video: {
-      facingMode: 'user',          // フロントカメラ（スマホ自撮り側）
-      width:  { ideal: camW, min: 480 },
-      height: { ideal: camH, min: 360 },
-      frameRate: { ideal: 30, max: 60 }
+      facingMode: 'user',   // フロントカメラ（スマホ自撮り側）
+      width:  { ideal: camW },
+      height: { ideal: camH },
+      frameRate: { ideal: 30 }
     },
     audio: false
   });
