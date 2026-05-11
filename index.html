@@ -36,29 +36,29 @@ let bolts = [];
 let auras = [];
 let frameCount2 = 0;
 let isVideoStarted = false;
- 
+
 // 指先インデックス: 親指4, 人差し指8, 中指12, 薬指16, 小指20
 const FINGERTIPS = [4, 8, 12, 16, 20];
 const PALM_CENTER = 9; // 中指MCP（手のひら中心に近い）
- 
+
 function preload() {
   handPose = ml5.handPose({ maxHands: 2 });
 }
- 
+
 function setup() {
   createCanvas(windowWidth, windowHeight);
   colorMode(RGB, 255, 255, 255, 255);
- 
+
   const constraints = {
     video: { facingMode: "user", width: 640, height: 480 }
   };
- 
+
   video = createCapture(constraints, function(stream) {
     isVideoStarted = true;
   });
   video.size(640, 480);
   video.hide();
- 
+
   handPose.detectStart(video, (results) => {
     hands = results;
     if (results.length > 0) {
@@ -66,14 +66,14 @@ function setup() {
     }
   });
 }
- 
+
 // 座標変換（ミラー対応）
 function mx(x) { return map(x, 640, 0, 0, width); }
 function my(y) { return map(y, 0, 480, 0, height); }
- 
+
 function draw() {
   frameCount2++;
- 
+
   // カメラ映像をミラー描画
   push();
   translate(width, 0);
@@ -90,26 +90,26 @@ function draw() {
   }
   image(video, x, y, w, h);
   pop();
- 
+
   // 残像エフェクト（少し暗め）
   background(0, 0, 0, 100);
- 
+
   if (hands.length > 0) {
     for (let hand of hands) {
       let kp = hand.keypoints;
- 
+
       // ── 手のひら中心座標 ──
       let palmX = mx(kp[PALM_CENTER].x);
       let palmY = my(kp[PALM_CENTER].y);
- 
+
       // ── 1. 手が見えたら毎フレーム: オーラ放出 ──
       auras.push(new Aura(palmX, palmY));
- 
+
       // ── 2. 一定間隔でショックウェーブリング ──
       if (frameCount2 % 12 === 0) {
         rings.push(new Ring(palmX, palmY, random(200, 400)));
       }
- 
+
       // ── 3. 全指先からパーティクル放出 ──
       for (let idx of FINGERTIPS) {
         let fx = mx(kp[idx].x);
@@ -118,7 +118,7 @@ function draw() {
           particles.push(new Particle(fx, fy, false, null));
         }
       }
- 
+
       // ── 4. 指先間にエネルギー稲妻 ──
       if (frameCount2 % 6 === 0) {
         let tips = FINGERTIPS.map(i => ({ x: mx(kp[i].x), y: my(kp[i].y) }));
@@ -127,17 +127,17 @@ function draw() {
         let b = tips[floor(random(tips.length))];
         if (a !== b) bolts.push(new Bolt(a.x, a.y, b.x, b.y));
       }
- 
+
       // ── 5. 手のひらに巨大輝体（グロウ球） ──
       drawPalmOrb(palmX, palmY);
- 
+
       // ── 6. 指先のグロウ ──
       for (let idx of FINGERTIPS) {
         let fx = mx(kp[idx].x);
         let fy = my(kp[idx].y);
         drawFingerGlow(fx, fy);
       }
- 
+
       // ── 7. ピンチで爆発（既存）──
       let indexTip = kp[8];
       let thumbTip = kp[4];
@@ -151,40 +151,40 @@ function draw() {
       }
     }
   }
- 
+
   // ── オーラ更新 ──
   for (let i = auras.length - 1; i >= 0; i--) {
     auras[i].update();
     auras[i].show();
     if (auras[i].finished()) auras.splice(i, 1);
   }
- 
+
   // ── リング更新 ──
   for (let i = rings.length - 1; i >= 0; i--) {
     rings[i].update();
     rings[i].show();
     if (rings[i].finished()) rings.splice(i, 1);
   }
- 
+
   // ── 稲妻更新 ──
   for (let i = bolts.length - 1; i >= 0; i--) {
     bolts[i].show();
     bolts.splice(i, 1);
   }
- 
+
   // ── パーティクル更新 ──
   for (let i = particles.length - 1; i >= 0; i--) {
     particles[i].update();
     particles[i].show();
     if (particles[i].finished()) particles.splice(i, 1);
   }
- 
+
   // パーティクル上限（パフォーマンス対策）
   if (particles.length > 800) particles.splice(0, particles.length - 800);
   if (rings.length > 30) rings.splice(0, rings.length - 30);
   if (auras.length > 60) auras.splice(0, auras.length - 60);
 }
- 
+
 // 手のひらのグロウ球
 function drawPalmOrb(x, y) {
   let t = frameCount2 * 0.05;
@@ -202,7 +202,7 @@ function drawPalmOrb(x, y) {
   fill(255, 255, 255, 180);
   ellipse(x, y, 16);
 }
- 
+
 // 指先グロウ
 function drawFingerGlow(x, y) {
   noStroke();
@@ -214,7 +214,7 @@ function drawFingerGlow(x, y) {
   fill(255, 255, 255, 220);
   ellipse(x, y, 8);
 }
- 
+
 // ピンチ爆発
 function createFirework(x, y) {
   let col = color(random(100, 255), random(100, 255), 255);
@@ -222,15 +222,15 @@ function createFirework(x, y) {
     particles.push(new Particle(x, y, true, col));
   }
 }
- 
+
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
- 
+
 function mousePressed() {
   if (video) video.play();
 }
- 
+
 // HSL→RGBヘルパー
 function hslToRgb(h, s, l, a) {
   h /= 360; s /= 100; l /= 100;
@@ -254,7 +254,7 @@ function hue2rgb(p, q, t) {
   if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
   return p;
 }
- 
+
 // ── ショックウェーブリング ──
 class Ring {
   constructor(x, y, maxR) {
@@ -284,7 +284,7 @@ class Ring {
   }
   finished() { return this.r > this.maxR || this.alpha < 0; }
 }
- 
+
 // ── オーラ（手のひら周囲を漂う粒子） ──
 class Aura {
   constructor(x, y) {
@@ -312,7 +312,7 @@ class Aura {
   }
   finished() { return this.alpha < 0; }
 }
- 
+
 // ── 稲妻ボルト ──
 class Bolt {
   constructor(x1, y1, x2, y2) {
@@ -349,7 +349,7 @@ class Bolt {
     endShape();
   }
 }
- 
+
 // ── パーティクル ──
 class Particle {
   constructor(x, y, isExplosion, col) {
@@ -393,4 +393,3 @@ class Particle {
 </script>
 </body>
 </html>
- 
