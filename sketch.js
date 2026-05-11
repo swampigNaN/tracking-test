@@ -1,21 +1,33 @@
 let handPose;
 let video;
 let hands = [];
-let particles = []; // 火花の粒
-let fireworks = []; // 打ち上げ花火
+let particles = [];
+let isVideoStarted = false;
 
 function preload() {
-    // 手の検知モデルをロード
+    // AIモデルのロード
     handPose = ml5.handPose();
 }
 
 function setup() {
     createCanvas(windowWidth, windowHeight);
-    video = createCapture(VIDEO);
+    
+    // スマホのインカメラを優先的に起動する設定
+    const constraints = {
+        video: {
+            facingMode: "user",
+            width: 640,
+            height: 480
+        }
+    };
+    
+    video = createCapture(constraints, function(stream) {
+        isVideoStarted = true;
+    });
     video.size(640, 480);
     video.hide();
     
-    // 手の検知を開始
+    // 手の検知開始
     handPose.detectStart(video, (results) => {
         hands = results;
         document.getElementById('loading').style.display = 'none';
@@ -23,43 +35,51 @@ function setup() {
 }
 
 function draw() {
-    // 映像を背景に描画（左右反転）
+    // 鏡合わせの描画処理
     push();
     translate(width, 0);
     scale(-1, 1);
-    // 画面いっぱいに広がるようにアスペクト比を調整して描画
+    
     let videoAspect = video.width / video.height;
     let windowAspect = width / height;
+    let x, y, w, h;
     if (windowAspect > videoAspect) {
-        image(video, 0, 0, width, width / videoAspect);
+        w = width;
+        h = width / videoAspect;
+        x = 0;
+        y = (height - h) / 2;
     } else {
-        image(video, -(height * videoAspect - width) / 2, 0, height * videoAspect, height);
+        w = height * videoAspect;
+        h = height;
+        x = (width - w) / 2;
+        y = 0;
     }
+    image(video, x, y, w, h);
     pop();
 
-    // 画面全体を少し暗くしてエフェクトを際立たせる（残像エフェクト）
-    background(0, 0, 0, 100);
+    // 画面を少し暗くして残像を作る
+    background(0, 0, 0, 120);
 
-    // 手が見つかった時の処理
     if (hands.length > 0) {
         for (let hand of hands) {
-            let indexTip = hand.keypoints[8]; // 人差し指の先
-            let thumbTip = hand.keypoints[4]; // 親指の先
+            // 人差し指(index_finger_tip)と親指(thumb_tip)の座標
+            let indexTip = hand.keypoints[8];
+            let thumbTip = hand.keypoints[4];
 
-            // 1. 人差し指の先に「魔法の粉」を出す
-            for (let i = 0; i < 3; i++) {
+            // 1. 人差し指から常に粉を出す
+            for (let i = 0; i < 2; i++) {
                 particles.push(new Particle(indexTip.x, indexTip.y, false));
             }
 
-            // 2. 「指パッチン」または「指をくっつける」動作で花火爆発
+            // 2. 指をくっつけると爆発
             let d = dist(indexTip.x, indexTip.y, thumbTip.x, thumbTip.y);
-            if (d < 30) { // 指がくっついたら
+            if (d < 35) { // 35ピクセル以内なら「接触」と判定
                 createFirework(indexTip.x, indexTip.y);
             }
         }
     }
 
-    // 火花の更新と描画
+    // パーティクルの更新と表示
     for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].update();
         particles[i].show();
@@ -69,38 +89,43 @@ function draw() {
     }
 }
 
-// ウィンドウサイズが変わった時の調整
-function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
-}
-
-// 花火を発生させる関数
+// 指をくっつけたときのエフェクト
 function createFirework(x, y) {
-    let col = color(random(255), random(255), random(255));
-    for (let i = 0; i < 50; i++) {
+    let col = color(random(100, 255), random(100, 255), random(255));
+    for (let i = 0; i < 20; i++) {
         particles.push(new Particle(x, y, true, col));
     }
 }
 
-// 火花の粒のクラス
+function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+}
+
+// iPhone対策：画面タップでビデオを確実に再生
+function mousePressed() {
+    if (video) {
+        video.play();
+    }
+}
+
+// 物理演算クラス
 class Particle {
     constructor(x, y, isExplosion, col) {
-        // カメラ座標(640x480)から画面座標へ変換（反転考慮）
+        // カメラの座標(640x480)を画面サイズに変換
         this.x = map(x, 640, 0, 0, width);
         this.y = map(y, 0, 480, 0, height);
         
         if (isExplosion) {
-            this.vx = random(-10, 10);
-            this.vy = random(-10, 10);
+            this.vx = random(-8, 8);
+            this.vy = random(-8, 8);
             this.color = col;
-            this.alpha = 255;
         } else {
-            this.vx = random(-2, 2);
-            this.vy = random(-2, 2);
-            this.color = color(255, 200, 0); // 基本は金色
-            this.alpha = 200;
+            this.vx = random(-1, 1);
+            this.vy = random(-1, 1);
+            this.color = color(255, 215, 0); // 金色
         }
         this.gravity = 0.15;
+        this.alpha = 255;
     }
 
     finished() {
@@ -111,7 +136,7 @@ class Particle {
         this.x += this.vx;
         this.y += this.vy;
         this.vy += this.gravity;
-        this.alpha -= 5;
+        this.alpha -= 7;
     }
 
     show() {
