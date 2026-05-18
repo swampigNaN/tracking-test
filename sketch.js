@@ -233,38 +233,48 @@ function draw() {
     const offsetY = vy;
 
     // 検出された手からパーティクルを生成
-    for (let i = 0; i < hands.length; i++) {
-      const hand = hands[i];
-      const keypoints = hand.keypoints;
+    if (hands && Array.isArray(hands)) {
+      for (let i = 0; i < hands.length; i++) {
+        const hand = hands[i];
+        
+        // もし想定外のデータ構造だった場合スキップする（TypeError防止）
+        if (!hand || !hand.keypoints) continue;
+        
+        const keypoints = hand.keypoints;
 
-      // 指先からエフェクトを発生
-      for (let fi = 0; fi < FINGERTIP_INDICES.length; fi++) {
-        const idx = FINGERTIP_INDICES[fi];
-        const kp = keypoints[idx];
-        const sx = kp.x * scaleX + offsetX;
-        const sy = kp.y * scaleY + offsetY;
+        // 指先からエフェクトを発生
+        for (let fi = 0; fi < FINGERTIP_INDICES.length; fi++) {
+          const idx = FINGERTIP_INDICES[fi];
+          const kp = keypoints[idx];
+          if (!kp) continue; // 安全策
+          
+          const sx = kp.x * scaleX + offsetX;
+          const sy = kp.y * scaleY + offsetY;
 
-        // エフェクトごとにパーティクルを生成
-        spawnParticles(sx, sy, fi);
-      }
+          // エフェクトごとにパーティクルを生成
+          spawnParticles(sx, sy, fi);
+        }
 
-      // 手のひらにもエフェクト
-      const palm = keypoints[PALM_INDEX];
-      const palmX = palm.x * scaleX + offsetX;
-      const palmY = palm.y * scaleY + offsetY;
-      spawnPalmEffect(palmX, palmY);
+        // 手のひらにもエフェクト
+        const palm = keypoints[PALM_INDEX];
+        if (palm) {
+          const palmX = palm.x * scaleX + offsetX;
+          const palmY = palm.y * scaleY + offsetY;
+          spawnPalmEffect(palmX, palmY);
+        }
 
-      // 雷光エフェクトの場合、指先間に電撃を描画
-      if (currentEffect === 'lightning') {
-        drawLightning(keypoints, scaleX, scaleY, offsetX, offsetY);
-      }
+        // 雷光エフェクトの場合、指先間に電撃を描画
+        if (currentEffect === 'lightning') {
+          drawLightning(keypoints, scaleX, scaleY, offsetX, offsetY);
+        }
 
-      // 手の輪郭グロー
-      drawHandGlow(keypoints, scaleX, scaleY, offsetX, offsetY);
+        // 手の輪郭グロー
+        drawHandGlow(keypoints, scaleX, scaleY, offsetX, offsetY);
 
-      // デバッグ用のキーポイント描画（認識確認用）
-      if (showDebug) {
-        drawDebugKeypoints(keypoints, scaleX, scaleY, offsetX, offsetY);
+        // デバッグ用のキーポイント描画（認識確認用）
+        if (showDebug) {
+          drawDebugKeypoints(keypoints, scaleX, scaleY, offsetX, offsetY);
+        }
       }
     }
 
@@ -294,7 +304,13 @@ function windowResized() {
 let gotHandsFirstLog = false;
 function gotHands(results) {
   if (!gotHandsFirstLog) {
-    logDebug("gotHands: AIが最初の結果を返しました。手:" + results.length);
+    let structure = "不明";
+    if (results && results.length > 0) {
+      if (results[0].keypoints) structure = "keypoints有";
+      else if (results[0].annotations) structure = "annotations有(旧版)";
+      else structure = "未知の構造";
+    }
+    logDebug(`gotHands: AIが最初の結果を返しました。数:${results ? results.length : 0} 構造:${structure}`);
     gotHandsFirstLog = true;
   }
   hands = results;
