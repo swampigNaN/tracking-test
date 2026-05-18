@@ -143,7 +143,17 @@ async function startCameraFlow() {
     videoEl.setAttribute('webkit-playsinline', ''); 
     videoEl.setAttribute('muted', '');
     videoEl.muted = true;
-    videoEl.style.display = 'none';
+    
+    // 🔥 ここがポイント：映像をp5.jsのキャンバスの裏に「ネイティブ要素として」全画面配置する
+    videoEl.style.position = 'fixed';
+    videoEl.style.top = '0';
+    videoEl.style.left = '0';
+    videoEl.style.width = '100vw';
+    videoEl.style.height = '100vh';
+    videoEl.style.objectFit = 'cover';
+    videoEl.style.transform = 'scaleX(-1)'; // 左右反転（鏡）
+    videoEl.style.zIndex = '0'; // キャンバス(z-index:1)の裏側に置く
+    
     document.body.appendChild(videoEl);
 
     logDebug("ビデオ要素の準備完了待機中...");
@@ -157,12 +167,8 @@ async function startCameraFlow() {
     
     logDebug(`ビデオ再生開始: ${videoEl.videoWidth}x${videoEl.videoHeight}`);
 
-    // p5.jsのvideoオブジェクトとしてラップ
-    video = createVideo('');
-    video.elt.replaceWith(videoEl);
-    video.elt = videoEl;
-    video.width = videoEl.videoWidth || 1280;
-    video.height = videoEl.videoHeight || 720;
+    // グローバル変数にセット（p5での描画用ではなく参照用）
+    video = videoEl;
 
     logDebug("ml5.handPose モデルのロードを開始...");
     
@@ -201,13 +207,14 @@ function draw() {
     // カメラとモデルの準備が完了していない場合は処理をスキップ
     if (!video || !modelReady) return;
 
-    // 背景をクリア（毎フレーム）
-    background(0);
+    // 🔥 背景を完全に透明にして、裏にあるネイティブのカメラ映像を透かして見せる
+    clear();
 
     // ==========================================
-    // カメラ映像のアスペクト比を保ちながら全画面表示
+    // ネイティブvideo要素がobject-fit: coverで全画面表示されているため、
+    // パーティクルの座標もその比率に合わせてスケーリングする
     // ==========================================
-    const aspectRatio = (video.width > 0 ? video.width : 640) / (video.height > 0 ? video.height : 480);
+    const aspectRatio = (video.videoWidth > 0 ? video.videoWidth : 640) / (video.videoHeight > 0 ? video.videoHeight : 480);
     let vw = width;
     let vh = width / aspectRatio;
     if (vh < height) {
@@ -217,21 +224,11 @@ function draw() {
     const vx = (width - vw) / 2;
     const vy = (height - vh) / 2;
 
-    // 映像を左右ミラー反転して描画（カメラ映像をくっきり表示）
-    push();
-    // tintを外して、カメラの映像をそのまま100%の濃さで表示
-    translate(width, 0);
-    scale(-1, 1);
-    // ※確実にネイティブ要素を描画させるため video.elt を使用
-    image(video.elt, width - vx - vw, vy, vw, vh);
-    pop();
+    // ※ videoの描画(image関数)は不要になりました（HTML側で表示しているため）
 
-    // ==========================================
     // handPoseはflipped:trueで座標が既にミラー済み
-    // → 映像と同じ座標系（左=左、右=右）で使える
-    // ==========================================
-    const scaleX = vw / (video.width > 0 ? video.width : 640);
-    const scaleY = vh / (video.height > 0 ? video.height : 480);
+    const scaleX = vw / (video.videoWidth > 0 ? video.videoWidth : 640);
+    const scaleY = vh / (video.videoHeight > 0 ? video.videoHeight : 480);
     const offsetX = vx;
     const offsetY = vy;
 
