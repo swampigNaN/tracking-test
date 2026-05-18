@@ -174,7 +174,11 @@ async function startCameraFlow() {
       if (overlay) overlay.classList.add('hidden');
       
       logDebug("手の検出プロセス開始...");
-      handPose.detectStart(videoEl, gotHands);
+      try {
+        handPose.detectStart(videoEl, gotHands);
+      } catch(e) {
+        logDebug("detectStart 呼び出しエラー: " + e.message);
+      }
     });
 
   } catch (err) {
@@ -193,87 +197,94 @@ function showCameraError(err) {
 }
 
 function draw() {
-  // 半透明の黒で残像効果
-  background(10, 10, 15, 40);
+  try {
+    // 半透明の黒で残像効果
+    background(10, 10, 15, 40);
 
-  // カメラとモデルの準備が完了していない場合は処理をスキップ（エラー回避）
-  if (!video || !modelReady) return;
+    // カメラとモデルの準備が完了していない場合は処理をスキップ（エラー回避）
+    if (!video || !modelReady) return;
 
-  // ==========================================
-  // カメラ映像のアスペクト比を保ちながら全画面表示
-  // ==========================================
-  const aspectRatio = (video.width > 0 ? video.width : 640) / (video.height > 0 ? video.height : 480);
-  let vw = width;
-  let vh = width / aspectRatio;
-  if (vh < height) {
-    vh = height;
-    vw = height * aspectRatio;
+    // ==========================================
+    // カメラ映像のアスペクト比を保ちながら全画面表示
+    // ==========================================
+    const aspectRatio = (video.width > 0 ? video.width : 640) / (video.height > 0 ? video.height : 480);
+    let vw = width;
+    let vh = width / aspectRatio;
+    if (vh < height) {
+      vh = height;
+      vw = height * aspectRatio;
+    }
+    const vx = (width - vw) / 2;
+    const vy = (height - vh) / 2;
+
+    // 映像を左右ミラー反転して描画（自撮り鏡の自然な見え方）
+    push();
+    tint(255, 60);
+    translate(width, 0);
+    scale(-1, 1);
+    // ミラー反転後の座標系でのx位置を計算
+    // ※確実にネイティブ要素を描画させるため video.elt を使用
+    image(video.elt, width - vx - vw, vy, vw, vh);
+    pop();
+
+    // ==========================================
+    // handPoseはflipped:trueで座標が既にミラー済み
+    // → 映像と同じ座標系（左=左、右=右）で使える
+    // ==========================================
+    const scaleX = vw / (video.width > 0 ? video.width : 640);
+    const scaleY = vh / (video.height > 0 ? video.height : 480);
+    const offsetX = vx;
+    const offsetY = vy;
+
+    // 検出された手からパーティクルを生成
+    for (let i = 0; i < hands.length; i++) {
+      const hand = hands[i];
+      const keypoints = hand.keypoints;
+
+      // 指先からエフェクトを発生
+      for (let fi = 0; fi < FINGERTIP_INDICES.length; fi++) {
+        const idx = FINGERTIP_INDICES[fi];
+        const kp = keypoints[idx];
+        const sx = kp.x * scaleX + offsetX;
+        const sy = kp.y * scaleY + offsetY;
+
+        // エフェクトごとにパーティクルを生成
+        spawnParticles(sx, sy, fi);
+      }
+
+      // 手のひらにもエフェクト
+      const palm = keypoints[PALM_INDEX];
+      const palmX = palm.x * scaleX + offsetX;
+      const palmY = palm.y * scaleY + offsetY;
+      spawnPalmEffect(palmX, palmY);
+
+      // 雷光エフェクトの場合、指先間に電撃を描画
+      if (currentEffect === 'lightning') {
+        drawLightning(keypoints, scaleX, scaleY, offsetX, offsetY);
+      }
+
+      // 手の輪郭グロー
+      drawHandGlow(keypoints, scaleX, scaleY, offsetX, offsetY);
+
+      // デバッグ用のキーポイント描画（認識確認用）
+      if (showDebug) {
+        drawDebugKeypoints(keypoints, scaleX, scaleY, offsetX, offsetY);
+      }
+    }
+
+    // パーティクルの更新と描画
+    updateAndDrawParticles();
+
+    // FPS計算
+    updateFps();
+
+    // ステータス更新
+    updateStatus();
+
+  } catch (err) {
+    logDebug("drawループ内でエラー発生: " + err.message);
+    noLoop(); // エラーが連続してログに出るのを防ぐ
   }
-  const vx = (width - vw) / 2;
-  const vy = (height - vh) / 2;
-
-  // 映像を左右ミラー反転して描画（自撮り鏡の自然な見え方）
-  push();
-  tint(255, 60);
-  translate(width, 0);
-  scale(-1, 1);
-  // ミラー反転後の座標系でのx位置を計算
-  image(video, width - vx - vw, vy, vw, vh);
-  pop();
-
-  // ==========================================
-  // handPoseはflipped:trueで座標が既にミラー済み
-  // → 映像と同じ座標系（左=左、右=右）で使える
-  // ==========================================
-  const scaleX = vw / (video.width > 0 ? video.width : 640);
-  const scaleY = vh / (video.height > 0 ? video.height : 480);
-  const offsetX = vx;
-  const offsetY = vy;
-
-  // 検出された手からパーティクルを生成
-  for (let i = 0; i < hands.length; i++) {
-    const hand = hands[i];
-    const keypoints = hand.keypoints;
-
-    // 指先からエフェクトを発生
-    for (let fi = 0; fi < FINGERTIP_INDICES.length; fi++) {
-      const idx = FINGERTIP_INDICES[fi];
-      const kp = keypoints[idx];
-      const sx = kp.x * scaleX + offsetX;
-      const sy = kp.y * scaleY + offsetY;
-
-      // エフェクトごとにパーティクルを生成
-      spawnParticles(sx, sy, fi);
-    }
-
-    // 手のひらにもエフェクト
-    const palm = keypoints[PALM_INDEX];
-    const palmX = palm.x * scaleX + offsetX;
-    const palmY = palm.y * scaleY + offsetY;
-    spawnPalmEffect(palmX, palmY);
-
-    // 雷光エフェクトの場合、指先間に電撃を描画
-    if (currentEffect === 'lightning') {
-      drawLightning(keypoints, scaleX, scaleY, offsetX, offsetY);
-    }
-
-    // 手の輪郭グロー
-    drawHandGlow(keypoints, scaleX, scaleY, offsetX, offsetY);
-
-    // デバッグ用のキーポイント描画（認識確認用）
-    if (showDebug) {
-      drawDebugKeypoints(keypoints, scaleX, scaleY, offsetX, offsetY);
-    }
-  }
-
-  // パーティクルの更新と描画
-  updateAndDrawParticles();
-
-  // FPS計算
-  updateFps();
-
-  // ステータス更新
-  updateStatus();
 }
 
 function windowResized() {
@@ -284,7 +295,12 @@ function windowResized() {
 // 手の検出コールバック
 // ============================================
 
+let gotHandsFirstLog = false;
 function gotHands(results) {
+  if (!gotHandsFirstLog) {
+    logDebug("gotHands: AIが最初の結果を返しました。手:" + results.length);
+    gotHandsFirstLog = true;
+  }
   hands = results;
 
   // モデル準備完了を示す
